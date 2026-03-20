@@ -1,0 +1,275 @@
+/*
+ * Pix64 - Custom CSS Styling
+ * GNOME HIG compliant styles for the image to base64 converter
+ */
+
+/* Main content area */
+.main-content {
+    padding: 24px;
+}
+
+/* Drop zone styling */
+.drop-area {
+    border: 2px dashed @borders;
+    border-radius: 12px;
+    padding: 48px;
+    background: alpha(@view_bg_color, 0.5);
+    transition: all 200ms ease;
+}
+
+.drop-area:hover {
+    border-color: @accent_color;
+    background: alpha(@accent_bg_color, 0.1);
+}
+
+.drop-area:active {
+    border-color: @accent_color;
+    background: alpha(@accent_bg_color, 0.15);
+}
+
+/* Title and subtitle labels */
+.title-label {
+    font-size: 24px;
+    font-weight: bold;
+    letter-spacing: -0.02em;
+}
+
+.subtitle-label {
+    font-size: 14px;
+    color: @window_fg_color;
+    opacity: 0.7;
+}
+
+/* Results card */
+.results-card {
+    padding: 20px;
+    border-radius: 12px;
+    background: @card_bg_color;
+    border: 1px solid @card_shade_color;
+}
+
+/* Image preview */
+.image-preview {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px alpha(@shade_color, 0.1);
+}
+
+/* Base64 text view */
+.base64-text {
+    font-family: "Monospace", "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 12px;
+    background: @view_bg_color;
+    border-radius: 8px;
+    border: 1px solid @borders;
+}
+
+.base64-text text {
+    background: transparent;
+}
+
+/* Copy buttons */
+.copy-button {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 150ms ease;
+}
+
+.copy-button:hover {
+    transform: translateY(-1px);
+}
+
+.copy-button:active {
+    transform: translateY(0);
+}
+
+/* History sidebar */
+.history-sidebar {
+    background: @sidebar_bg_color;
+    border-right: 1px solid @borders;
+}
+
+/* History list items */
+.history-item {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 4px 8px;
+    transition: background-color 150ms ease;
+}
+
+.history-item:hover {
+    background: alpha(@window_fg_color, 0.05);
+}
+
+.history-item:selected {
+    background: alpha(@accent_bg_color, 0.15);
+}
+
+.history-item:selected:hover {
+    background: alpha(@accent_bg_color, 0.2);
+}
+
+/* File name in history */
+.file-name-label {
+    font-weight: 500;
+    font-size: 13px;
+}
+
+/* Timestamp and size labels */
+.info-label {
+    font-size: 11px;
+    color: @window_fg_color;
+    opacity: 0.6;
+}
+
+/* Header bar customizations */
+.header-bar {
+    border-bottom: 1px solid transparent;
+}
+
+.header-bar:backdrop {
+    background: @headerbar_backdrop_color;
+}
+
+/* Action buttons in header */
+.header-action-button {
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+/* Empty state */
+.empty-state {
+    padding: 24px;
+}
+
+.empty-state-icon {
+    opacity: 0.3;
+    margin-bottom: 12px;
+}
+
+.empty-state-label {
+    opacity: 0.5;
+    font-size: 14px;
+}
+
+/* Responsive adjustments - GTK4 doesn't support media queries,
+   so we use relative units and flexible layouts instead */
+
+/* Loading spinner */
+.loading-spinner {
+    padding: 24px;
+}
+
+/* Toast styling */
+.toast {
+    margin-bottom: 24px;
+}
+
+/* File info section */
+.file-info-box {
+    padding: 12px;
+    background: alpha(@window_fg_color, 0.03);
+    border-radius: 8px;
+}
+
+/* Info chips */
+.info-chip {
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: alpha(@accent_bg_color, 0.1);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* Separator */
+.separator {
+    min-height: 1px;
+    background: @borders;
+    margin: 12px 0;
+}
+
+/* Scrollbar styling */
+scrolledwindow scrollbar {
+    background: transparent;
+}
+
+scrolledwindow scrollbar slider {
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 4px;
+    background: alpha(@window_fg_color, 0.2);
+}
+
+scrolledwindow scrollbar slider:hover {
+    background: alpha(@window_fg_color, 0.3);
+}
+
+scrolledwindow scrollbar slider:active {
+    background: alpha(@window_fg_color, 0.4);
+}
+
+/* Frame and border styling */
+frame {
+    border-radius: 8px;
+}
+
+frame border {
+    border-radius: 8px;
+    border: 1px solid @borders;
+}
+
+/* Entry and text input */
+entry,
+textview {
+    border-radius: 8px;
+}
+
+/* Button variations */
+.pill {
+    border-radius: 9999px;
+    padding: 10px 24px;
+}
+
+/* Card styling */
+.card {
+    background: @card_bg_color;
+    border-radius: 12px;
+    border: 1px solid @card_shade_color;
+    padding: 16px;
+}
+
+/* Animation for showing results */
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.results-box {
+    animation: fade-in 200ms ease-out;
+}
+
+/* Dark mode specific adjustments */
+.dark .drop-area {
+    background: alpha(@view_bg_color, 0.3);
+}
+
+.dark .base64-text {
+    background: alpha(@view_bg_color, 0.5);
+}
+
+/* High contrast mode */
+.high-contrast .drop-area {
+    border-width: 3px;
+}
+
+.high-contrast .history-item {
+    border: 1px solid @borders;
+}

@@ -1,0 +1,21 @@
+[Desktop Entry]
+Name=Pix64
+Comment=Convert images to Base64 strings
+Comment[it]=Converti immagini in stringhe Base64
+Comment[es]=Convertir imágenes a cadenas Base64
+Comment[fr]=Convertir des images en chaînes Base64
+Comment[de]=Bilder in Base64-Zeichenfolgen konvertieren
+GenericName=Image to Base64 Converter
+GenericName[it]=Convertitore di immagini in Base64
+Exec=pix64 %F
+Icon=com.github.pix64
+Type=Application
+Categories=GNOME;GTK;Utility;Graphics;Development;
+Keywords=image;base64;converter;encode;gtk;
+Keywords[it]=immagine;base64;convertitore;codifica;gtk;
+StartupNotify=true
+Terminal=false
+MimeType=image/png;image/jpeg;image/jpg;image/gif;image/webp;image/svg+xml;image/bmp;image/tiff;
+X-GNOME-FullName=Pix64 Image to Base64 Converter
+X-GNOME-FullName[it]=Pix64 Convertitore di immagini in Base64
+X-GNOME-UsesNotifications=true
