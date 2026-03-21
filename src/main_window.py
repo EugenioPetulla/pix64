@@ -8,6 +8,7 @@ from pathlib import Path
 from .image_converter import ImageConverter
 from .history_manager import HistoryManager
 from typing import Optional
+import threading
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -97,9 +98,7 @@ class MainWindow(Adw.ApplicationWindow):
             provider.load_from_data(css)
 
         Gtk.StyleContext.add_provider_for_display(
-            self.get_display(),
-            provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            self.get_display(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
     def _build_ui(self):
@@ -151,8 +150,10 @@ class MainWindow(Adw.ApplicationWindow):
         history_button = Gtk.ToggleButton(icon_name="sidebar-show-symbolic")
         history_button.set_tooltip_text("Toggle History")
         history_button.bind_property(
-            "active", self.split_view, "show-sidebar",
-            GObject.BindingFlags.BIDIRECTIONAL
+            "active",
+            self.split_view,
+            "show-sidebar",
+            GObject.BindingFlags.BIDIRECTIONAL,
         )
         header_bar.pack_end(history_button)
 
@@ -202,13 +203,17 @@ class MainWindow(Adw.ApplicationWindow):
         content_box.set_spacing(24)
 
         # Drop area
-        drop_frame = Gtk.Frame()
-        drop_frame.add_css_class("drop-area")
+        self.drop_frame = Gtk.Frame()
+        self.drop_frame.add_css_class("drop-area")
 
         drop_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         drop_box.set_spacing(16)
         drop_box.set_halign(Gtk.Align.CENTER)
         drop_box.set_valign(Gtk.Align.CENTER)
+
+        self.loading_spinner = Gtk.Spinner()
+        self.loading_spinner.set_visible(False)
+        drop_box.append(self.loading_spinner)
 
         # Icon
         icon = Gtk.Image(icon_name="image-x-generic-symbolic")
@@ -232,11 +237,11 @@ class MainWindow(Adw.ApplicationWindow):
         select_button.connect("clicked", self._on_open_clicked)
         drop_box.append(select_button)
 
-        drop_frame.set_child(drop_box)
-        content_box.append(drop_frame)
+        self.drop_frame.set_child(drop_box)
+        content_box.append(self.drop_frame)
 
         # Setup drag and drop
-        self._setup_drag_drop(drop_frame)
+        self._setup_drag_drop(self.drop_frame)
 
         # Results section (initially hidden)
         self.results_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -370,69 +375,91 @@ class MainWindow(Adw.ApplicationWindow):
                 print(f"Error selecting file: {e.message}")
 
     def _load_image(self, file_path):
-        """Load and convert an image"""
-        try:
-            # Get file info
-            file_info = ImageConverter.get_file_info(file_path)
+        """Load and convert an image in a background thread"""
+        self._show_loading(True)
 
-            # Convert to base64
-            base64_string, mime_type = ImageConverter.image_to_base64(file_path)
+        def convert_in_thread():
+            try:
+                file_info = ImageConverter.get_file_info(file_path)
+                base64_string, mime_type = ImageConverter.image_to_base64(file_path)
 
-            # Save to history
-            entry = self.history_manager.add_conversion(
-                file_path, base64_string, mime_type, file_info['size']
-            )
+                GLib.idle_add(
+                    self._on_conversion_complete,
+                    file_path,
+                    base64_string,
+                    mime_type,
+                    file_info,
+                    None,
+                )
+            except Exception as e:
+                GLib.idle_add(
+                    self._on_conversion_complete, None, None, None, None, str(e)
+                )
 
-            # Update current conversion
-            self.current_conversion = entry
+        thread = threading.Thread(target=convert_in_thread, daemon=True)
+        thread.start()
 
-            # Update UI
-            self._update_results(file_path, base64_string, mime_type, file_info)
+    def _on_conversion_complete(
+        self, file_path, base64_string, mime_type, file_info, error
+    ):
+        """Handle conversion completion on main thread"""
+        self._show_loading(False)
 
-            # Refresh history
-            self._refresh_history_list()
+        if error:
+            self._show_error(error)
+            return
 
-        except FileNotFoundError as e:
-            self._show_error(f"File not found: {e}")
-        except ValueError as e:
-            self._show_error(f"Error reading file: {e}")
-        except Exception as e:
-            self._show_error(f"Unexpected error: {e}")
+        entry = self.history_manager.add_conversion(
+            file_path, base64_string, mime_type, file_info["size"]
+        )
+
+        self.current_conversion = entry
+        self._update_results(file_path, base64_string, mime_type, file_info)
+        self._refresh_history_list()
+
+    def _show_loading(self, loading):
+        """Show or hide loading indicator"""
+        if hasattr(self, "loading_spinner"):
+            self.loading_spinner.set_spinning(loading)
+            self.loading_spinner.set_visible(loading)
+        if hasattr(self, "drop_frame"):
+            self.drop_frame.set_sensitive(not loading)
 
     def _update_results(self, file_path, base64_string, mime_type, file_info):
         """Update the results display"""
-        # Show results box
         self.results_box.set_visible(True)
 
-        # Update image preview
         try:
             texture = Gdk.Texture.new_from_filename(file_path)
             self.image_preview.set_paintable(texture)
         except Exception:
-            # File might not exist anymore or be invalid
             self.image_preview.set_from_icon_name("image-missing-symbolic")
 
-        # Update file info
-        self.file_name_label.set_text(file_info['name'])
+        self.file_name_label.set_text(file_info["name"])
         self.file_info_label.set_text(
             f"{file_info['size_formatted']} • {mime_type} • {len(base64_string)} chars"
         )
 
-        # Update base64 text
         buffer = self.base64_textview.get_buffer()
-        buffer.set_text(base64_string)
+        max_display_chars = 50000
+        if len(base64_string) > max_display_chars:
+            truncated = (
+                base64_string[:max_display_chars]
+                + f"\n\n... (truncated, {len(base64_string) - max_display_chars:,} more characters - use Copy buttons for full string)"
+            )
+            buffer.set_text(truncated)
+        else:
+            buffer.set_text(base64_string)
 
-        # Scroll to the beginning to show the start of the base64 string
         start_iter = buffer.get_start_iter()
         buffer.place_cursor(start_iter)
-        # Use scroll_mark_onscreen with the insert mark for better compatibility
         insert_mark = buffer.get_insert()
         self.base64_textview.scroll_mark_onscreen(insert_mark)
 
     def _on_copy_base64(self, button):
         """Copy base64 string to clipboard"""
-        if self.current_conversion and 'base64_string' in self.current_conversion:
-            self._copy_to_clipboard(self.current_conversion['base64_string'])
+        if self.current_conversion and "base64_string" in self.current_conversion:
+            self._copy_to_clipboard(self.current_conversion["base64_string"])
             self._show_toast("Base64 string copied!")
 
     def _on_copy_data_uri(self, button):
@@ -455,7 +482,7 @@ class MainWindow(Adw.ApplicationWindow):
         toast.set_timeout(2)
 
         # Use the internal ToastOverlay
-        if hasattr(self, 'toast_overlay'):
+        if hasattr(self, "toast_overlay"):
             self.toast_overlay.add_toast(toast)
         else:
             print(f"Toast: {message}")
@@ -497,23 +524,21 @@ class MainWindow(Adw.ApplicationWindow):
         box.set_spacing(4)
 
         # File name
-        name_label = Gtk.Label(label=entry.get('file_name', 'Unknown'))
+        name_label = Gtk.Label(label=entry.get("file_name", "Unknown"))
         name_label.add_css_class("heading")
         name_label.set_halign(Gtk.Align.START)
         name_label.set_ellipsize(True)
         box.append(name_label)
 
         # Timestamp
-        timestamp = self.history_manager.format_timestamp(
-            entry.get('timestamp', '')
-        )
+        timestamp = self.history_manager.format_timestamp(entry.get("timestamp", ""))
         time_label = Gtk.Label(label=timestamp)
         time_label.add_css_class("caption")
         time_label.set_halign(Gtk.Align.START)
         box.append(time_label)
 
         # File size
-        size = entry.get('file_size', 0)
+        size = entry.get("file_size", 0)
         size_str = f"{size / 1024:.1f} KB"
         size_label = Gtk.Label(label=size_str)
         size_label.add_css_class("caption")
@@ -521,26 +546,26 @@ class MainWindow(Adw.ApplicationWindow):
         box.append(size_label)
 
         # Store entry data in row
-        row.conversion_id = entry.get('id')
+        row.conversion_id = entry.get("id")
 
         row.set_child(box)
         return row
 
     def _on_history_row_activated(self, list_box, row):
         """Handle history row activation"""
-        if hasattr(row, 'conversion_id'):
+        if hasattr(row, "conversion_id"):
             entry = self.history_manager.get_conversion(row.conversion_id)
             if entry:
                 self.current_conversion = entry
 
                 # Update UI with selected conversion
                 self._update_results(
-                    entry.get('file_path', ''),
-                    entry.get('base64_string', ''),
-                    entry.get('mime_type', ''),
+                    entry.get("file_path", ""),
+                    entry.get("base64_string", ""),
+                    entry.get("mime_type", ""),
                     {
-                        'name': entry.get('file_name', 'Unknown'),
-                        'size_formatted': f"{entry.get('file_size', 0) / 1024:.1f} KB",
-                        'size': entry.get('file_size', 0)
-                    }
+                        "name": entry.get("file_name", "Unknown"),
+                        "size_formatted": f"{entry.get('file_size', 0) / 1024:.1f} KB",
+                        "size": entry.get("file_size", 0),
+                    },
                 )

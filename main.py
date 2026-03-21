@@ -8,8 +8,8 @@ import sys
 import gi
 
 # Ensure GTK and Libadwaita are available
-gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
 
 from gi.repository import Gtk, Adw, Gio, GLib
 from src.main_window import MainWindow
@@ -20,8 +20,7 @@ class Application(Adw.Application):
 
     def __init__(self):
         super().__init__(
-            application_id='com.github.pix64',
-            flags=Gio.ApplicationFlags.FLAGS_NONE
+            application_id="com.github.pix64", flags=Gio.ApplicationFlags.FLAGS_NONE
         )
 
         # Add command line options if needed
@@ -48,24 +47,17 @@ class Application(Adw.Application):
     def _create_actions(self):
         """Create application actions"""
         # Clear history action
-        clear_history_action = Gio.SimpleAction.new('clear-history', None)
-        clear_history_action.connect('activate', self._on_clear_history)
+        clear_history_action = Gio.SimpleAction.new("clear-history", None)
+        clear_history_action.connect("activate", self._on_clear_history)
         self.add_action(clear_history_action)
 
     def _on_clear_history(self, action, param):
         """Handle clear history action"""
-        from src.history_manager import HistoryManager
-        history_manager = HistoryManager()
-
-        # Clear all history
-        if history_manager.clear_all_history():
-            # Refresh history list in main window
-            if hasattr(self, 'main_window'):
+        if hasattr(self, "main_window") and self.main_window:
+            if self.main_window.history_manager.clear_all_history():
                 self.main_window._refresh_history_list()
                 self.main_window._show_toast("History cleared")
-        else:
-            # Show error toast
-            if hasattr(self, 'main_window'):
+            else:
                 self.main_window._show_toast("Error clearing history")
 
 
@@ -75,5 +67,5 @@ def main(version):
     return app.run(sys.argv)
 
 
-if __name__ == '__main__':
-    main('')
+if __name__ == "__main__":
+    main("")
