@@ -51,6 +51,11 @@ class Application(Adw.Application):
         clear_history_action.connect("activate", self._on_clear_history)
         self.add_action(clear_history_action)
 
+        # Delete single history item action
+        delete_item_action = Gio.SimpleAction.new("delete-history-item", None)
+        delete_item_action.connect("activate", self._on_delete_history_item)
+        self.add_action(delete_item_action)
+
     def _on_clear_history(self, action, param):
         """Handle clear history action"""
         if hasattr(self, "main_window") and self.main_window:
@@ -59,6 +64,17 @@ class Application(Adw.Application):
                 self.main_window._show_toast("History cleared")
             else:
                 self.main_window._show_toast("Error clearing history")
+
+    def _on_delete_history_item(self, action, param):
+        """Handle delete single history item action"""
+        if hasattr(self, "main_window") and self.main_window:
+            if hasattr(self.main_window, "_pending_delete_id"):
+                item_id = self.main_window._pending_delete_id
+                if self.main_window.history_manager.remove_conversion(item_id):
+                    self.main_window._refresh_history_list()
+                    self.main_window._show_toast("Item deleted")
+                else:
+                    self.main_window._show_toast("Error deleting item")
 
 
 def main(version):

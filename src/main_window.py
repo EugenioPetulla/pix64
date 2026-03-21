@@ -94,6 +94,15 @@ class MainWindow(Adw.ApplicationWindow):
                 .image-preview {
                     border-radius: 8px;
                 }
+
+                .loading-overlay {
+                    background-color: alpha(@view_bg_color, 0.85);
+                }
+
+                .history-thumbnail {
+                    border-radius: 6px;
+                    overflow: hidden;
+                }
             """
             provider.load_from_data(css)
 
@@ -103,6 +112,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _build_ui(self):
         """Build the main user interface"""
+        # Main overlay for loading spinner
+        self.main_overlay = Gtk.Overlay()
+
         # Create split view first (needed for header bar binding)
         self.split_view = Adw.OverlaySplitView()
         self.split_view.set_min_sidebar_width(280)
@@ -125,14 +137,39 @@ class MainWindow(Adw.ApplicationWindow):
         self.toast_overlay = Adw.ToastOverlay()
         self.toast_overlay.set_child(main_box)
 
-        # Set ToastOverlay as window content
-        self.set_content(self.toast_overlay)
+        # Set ToastOverlay as main overlay's child
+        self.main_overlay.set_child(self.toast_overlay)
+
+        # Build loading overlay
+        self._build_loading_overlay()
+
+        # Set main overlay as window content
+        self.set_content(self.main_overlay)
 
         # Sidebar (History)
         self._build_sidebar()
 
         # Main content
         self._build_main_content()
+
+    def _build_loading_overlay(self):
+        """Build the loading overlay"""
+        self.loading_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.loading_box.add_css_class("loading-overlay")
+        self.loading_box.set_halign(Gtk.Align.CENTER)
+        self.loading_box.set_valign(Gtk.Align.CENTER)
+        self.loading_box.set_spacing(16)
+
+        self.loading_spinner = Gtk.Spinner()
+        self.loading_spinner.set_spinning(False)
+        self.loading_box.append(self.loading_spinner)
+
+        loading_label = Gtk.Label(label="Converting image...")
+        loading_label.add_css_class("title-label")
+        self.loading_box.append(loading_label)
+
+        self.loading_box.set_visible(False)
+        self.main_overlay.add_overlay(self.loading_box)
 
     def _build_header_bar(self, parent):
         """Build the header bar"""
@@ -211,10 +248,6 @@ class MainWindow(Adw.ApplicationWindow):
         drop_box.set_halign(Gtk.Align.CENTER)
         drop_box.set_valign(Gtk.Align.CENTER)
 
-        self.loading_spinner = Gtk.Spinner()
-        self.loading_spinner.set_visible(False)
-        drop_box.append(self.loading_spinner)
-
         # Icon
         icon = Gtk.Image(icon_name="image-x-generic-symbolic")
         icon.set_pixel_size(64)
@@ -253,10 +286,16 @@ class MainWindow(Adw.ApplicationWindow):
         preview_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         preview_box.set_spacing(16)
 
-        self.image_preview = Gtk.Image()
-        self.image_preview.set_pixel_size(128)
-        self.image_preview.add_css_class("image-preview")
-        preview_box.append(self.image_preview)
+        preview_frame = Gtk.Frame()
+        preview_frame.add_css_class("image-preview")
+        preview_frame.set_size_request(96, 96)
+
+        self.image_preview = Gtk.Picture()
+        self.image_preview.set_content_fit(Gtk.ContentFit.COVER)
+        self.image_preview.set_size_request(96, 96)
+        self.image_preview.set_can_shrink(True)
+        preview_frame.set_child(self.image_preview)
+        preview_box.append(preview_frame)
 
         # File info
         info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -418,10 +457,11 @@ class MainWindow(Adw.ApplicationWindow):
         self._refresh_history_list()
 
     def _show_loading(self, loading):
-        """Show or hide loading indicator"""
+        """Show or hide loading overlay"""
+        if hasattr(self, "loading_box"):
+            self.loading_box.set_visible(loading)
         if hasattr(self, "loading_spinner"):
             self.loading_spinner.set_spinning(loading)
-            self.loading_spinner.set_visible(loading)
         if hasattr(self, "drop_frame"):
             self.drop_frame.set_sensitive(not loading)
 
@@ -433,7 +473,7 @@ class MainWindow(Adw.ApplicationWindow):
             texture = Gdk.Texture.new_from_filename(file_path)
             self.image_preview.set_paintable(texture)
         except Exception:
-            self.image_preview.set_from_icon_name("image-missing-symbolic")
+            self.image_preview.set_paintable(None)
 
         self.file_name_label.set_text(file_info["name"])
         self.file_info_label.set_text(
@@ -516,26 +556,54 @@ class MainWindow(Adw.ApplicationWindow):
             self.history_list.append(row)
 
     def _create_history_row(self, entry):
-        """Create a history list row"""
+        """Create a history list row with thumbnail and context menu"""
         row = Gtk.ListBoxRow()
         row.add_css_class("history-item")
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.set_spacing(4)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        main_box.set_spacing(12)
+
+        # Thumbnail frame for square crop
+        thumbnail_frame = Gtk.Frame()
+        thumbnail_frame.add_css_class("history-thumbnail")
+        thumbnail_frame.set_size_request(48, 48)
+
+        thumbnail = Gtk.Picture()
+        thumbnail.set_content_fit(Gtk.ContentFit.COVER)
+        thumbnail.set_size_request(48, 48)
+        thumbnail.set_can_shrink(True)
+
+        file_path = entry.get("file_path", "")
+        if file_path and Path(file_path).exists():
+            try:
+                texture = Gdk.Texture.new_from_filename(file_path)
+                thumbnail.set_paintable(texture)
+            except Exception:
+                thumbnail.set_paintable(None)
+        else:
+            thumbnail.set_paintable(None)
+
+        thumbnail_frame.set_child(thumbnail)
+        main_box.append(thumbnail_frame)
+
+        # Info box
+        info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        info_box.set_spacing(2)
+        info_box.set_hexpand(True)
 
         # File name
         name_label = Gtk.Label(label=entry.get("file_name", "Unknown"))
         name_label.add_css_class("heading")
         name_label.set_halign(Gtk.Align.START)
         name_label.set_ellipsize(True)
-        box.append(name_label)
+        info_box.append(name_label)
 
         # Timestamp
         timestamp = self.history_manager.format_timestamp(entry.get("timestamp", ""))
         time_label = Gtk.Label(label=timestamp)
         time_label.add_css_class("caption")
         time_label.set_halign(Gtk.Align.START)
-        box.append(time_label)
+        info_box.append(time_label)
 
         # File size
         size = entry.get("file_size", 0)
@@ -543,13 +611,37 @@ class MainWindow(Adw.ApplicationWindow):
         size_label = Gtk.Label(label=size_str)
         size_label.add_css_class("caption")
         size_label.set_halign(Gtk.Align.START)
-        box.append(size_label)
+        info_box.append(size_label)
+
+        main_box.append(info_box)
+        row.set_child(main_box)
 
         # Store entry data in row
         row.conversion_id = entry.get("id")
 
-        row.set_child(box)
+        # Add right-click context menu
+        gesture = Gtk.GestureClick(button=3)
+        gesture.connect("pressed", self._on_history_row_right_click, row)
+        row.add_controller(gesture)
+
         return row
+
+    def _on_history_row_right_click(self, gesture, n_press, x, y, row):
+        """Handle right-click on history row"""
+        if not hasattr(row, "conversion_id"):
+            return
+
+        menu = Gio.Menu.new()
+        menu.append("Delete", "app.delete-history-item")
+
+        popover = Gtk.PopoverMenu()
+        popover.set_menu_model(menu)
+        popover.set_has_arrow(False)
+        popover.set_parent(row)
+        popover.set_position(Gtk.PositionType.BOTTOM)
+
+        self._pending_delete_id = row.conversion_id
+        popover.popup()
 
     def _on_history_row_activated(self, list_box, row):
         """Handle history row activation"""
